@@ -1,0 +1,12 @@
+[providers]
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = ["...", "curl"]
+cmds = ["curl -L https://raw.githubusercontent.com/jcarbonnell/rindexer/main/install.sh | bash", "export PATH=$HOME/.rindexer/bin:$PATH"]
+
+[phases.build]
+cmds = ["echo 'No front-end build needed for Rindexer'"]
+
+[start]
+cmd = "export PATH=$HOME/.rindexer/bin:$PATH && rindexer start all || (sleep 5 && export PATH=$HOME/.rindexer/bin:$PATH && rindexer start all)"
