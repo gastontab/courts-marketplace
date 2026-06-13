@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "railway-build": "echo 'Skipping Next.js build for indexer'",
     "start": "next start",
     "lint": "next lint",
     "anvil": "anvil --load-state marketplace-anvil.json --block-time 2",
