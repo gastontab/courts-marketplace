@@ -1,8 +1,8 @@
 #!/bin/bash
 
-node install-rindexer.js
 
 cd marketplaceIndexer
 
-echo "Iniciando Rindexer..."
-../rindexer start all || (sleep 5 && ../rindexer start all)
+
+echo "Iniciando Rindexer mediante pnpm dlx..."
+pnpm dlx rindexer start all || (sleep 5 && pnpm dlx rindexer start all)
