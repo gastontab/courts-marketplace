@@ -152,9 +152,25 @@ export default function SellerDashboard() {
     }, [existingListing])
 
     // 3. Retrieve the complete history to set up the user's courts (Carousel)
-    const { data: rindexerData, refetch: refetchSellerHistory } = useQuery({
+    const {
+        data: rindexerData,
+        refetch: refetchSellerHistory,
+    } = useQuery({
         queryKey: ["sellerHistory", address],
-        queryFn: async () => request("http://localhost:3001/graphql", GET_SELLER_HISTORY),
+        queryFn: async () => {
+            const res = await fetch("/api/graphql", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    query: GET_SELLER_HISTORY,
+                    variables: { sellerAddress: address },
+                }),
+            })
+
+            if (!res.ok) throw new Error("Network response was not ok")
+            const json = await res.json()
+            return json.data
+        },
         enabled: !!address,
     })
 
