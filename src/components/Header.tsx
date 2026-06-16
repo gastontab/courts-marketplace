@@ -5,22 +5,24 @@ import { FaGithub } from "react-icons/fa"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useAccount, useReadContract, useWriteContract, useChainId } from "wagmi"
+import { useAccount, useReadContract, useWriteContract, useChainId, usePublicClient } from "wagmi"
 import { useState } from "react"
 import { chainsToContracts, erc20Abi } from "@/constants"
+import FaucetSuccessModal from "@/components/FaucetSuccessModal"
 
 export default function Header() {
     const chainId = useChainId()
 
-    const nftContractAddress = (chainsToContracts[chainId]?.courtNft as `0x${string}`) || "0x"
+    const usdcContractAddress = (chainsToContracts[chainId]?.usdc as `0x${string}`) || "0x"
     const pathname = usePathname()
     const { address, isConnected } = useAccount()
     const [isMinting, setIsMinting] = useState(false)
+    const [showFaucetSuccess, setShowFaucetSuccess] = useState(false)
 
     const { writeContractAsync } = useWriteContract()
 
     const { data: balance, refetch: refetchBalance } = useReadContract({
-        address: nftContractAddress,
+        address: usdcContractAddress,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: address ? [address] : undefined,
@@ -29,17 +31,29 @@ export default function Header() {
         },
     })
 
+    const publicClient = usePublicClient()
+
     const handleClaimFaucet = async () => {
         try {
             setIsMinting(true)
-            await writeContractAsync({
-                address: nftContractAddress,
+
+            const hash = await writeContractAsync({
+                address: usdcContractAddress,
                 abi: erc20Abi,
                 functionName: "claimFaucet",
             })
-            refetchBalance()
+
+            if (!publicClient) {
+                throw new Error("Public client not available")
+            }
+
+            await publicClient.waitForTransactionReceipt({ hash })
+
+            await refetchBalance()
+
+            setShowFaucetSuccess(true)
         } catch (error) {
-            console.error("Error claiming faucet:", error)
+            console.error(error)
         } finally {
             setIsMinting(false)
         }
@@ -121,6 +135,11 @@ export default function Header() {
 
                 <ConnectButton chainStatus="icon" showBalance={false} />
             </div>
+            <FaucetSuccessModal
+                isOpen={showFaucetSuccess}
+                onClose={() => setShowFaucetSuccess(false)}
+                tokenAddress={usdcContractAddress}
+            />
         </nav>
     )
 }

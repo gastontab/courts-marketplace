@@ -7,6 +7,7 @@ import { useReadContract, useAccount, useWriteContract, useWaitForTransactionRec
 import { courtAbi } from "../constants"
 import { CgSpinner } from "react-icons/cg"
 import { FaTag, FaTimesCircle, FaCheck, FaHourglassHalf } from "react-icons/fa"
+import { FiCopy, FiCheck } from "react-icons/fi"
 
 export type NFTBoxAction = { type: "UPDATED"; newPrice: string } | { type: "CANCELED" }
 
@@ -45,6 +46,7 @@ export default function NFTBox({
     const [isEditingPrice, setIsEditingPrice] = useState(false)
     const [newPrice, setNewPrice] = useState("")
     const [pendingAction, setPendingAction] = useState<NFTBoxAction | null>(null)
+    const [copied, setCopied] = useState(false)
 
     // 1. Read the TokenURI for the court metadata
     const { data: tokenURIData, isLoading: isTokenURILoading } = useReadContract({
@@ -173,6 +175,16 @@ export default function NFTBox({
         }
     }
 
+    const handleCopy = async () => {
+        await navigator.clipboard.writeText(contractAddress)
+
+        setCopied(true)
+
+        setTimeout(() => {
+            setCopied(false)
+        }, 2000)
+    }
+
     const isWorking = isWalletWaiting || isTxConfirming
 
     return (
@@ -247,12 +259,25 @@ export default function NFTBox({
                             </span>
                         )}
                     </div>
-                    <p
-                        className="text-xs text-zinc-400 font-mono truncate"
-                        title={contractAddress}
-                    >
-                        {contractAddress.slice(0, 6)}...{contractAddress.slice(-4)}
-                    </p>
+                    <div className="flex justify-start items-start mb-1">
+                        <p
+                            className="mr-1 text-xs text-zinc-400 font-mono truncate"
+                            title={contractAddress}
+                        >
+                            {contractAddress.slice(0, 6)}...{contractAddress.slice(-4)}
+                        </p>
+                        <button
+                            onClick={handleCopy}
+                            className="p-0.5 rounded-md hover:bg-zinc-100 transition-colors cursor-pointer"
+                            title={copied ? "Copied!" : "Copy address"}
+                        >
+                            {copied ? (
+                                <FiCheck className="h-4 w-4 text-emerald-600" />
+                            ) : (
+                                <FiCopy className="h-4 w-4" />
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="pt-2 border-t border-zinc-100">
