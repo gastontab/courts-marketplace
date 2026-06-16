@@ -8,6 +8,8 @@ import Link from "next/link"
 import { CgSpinner } from "react-icons/cg"
 import { GiTennisCourt } from "react-icons/gi"
 import { marketplaceAbi, chainsToContracts } from "@/constants"
+import { useOptimisticListings } from "@/hooks/useOptimisticListings"
+import { NFTBoxAction } from "@/components/NFTBox"
 
 const GET_MARKETPLACE_EVENTS = `
   query GetMarketplaceEvents {
@@ -181,11 +183,14 @@ export default function RecentlyListedNFTs() {
         return Object.values(listingsMap)
     }, [data])
 
+    const { displayListings, applyOptimisticUpdate } = useOptimisticListings(activeListings)
+
     const handleRefreshData = async () => {
-        setTimeout(async () => {
-            await queryClient.invalidateQueries({ queryKey: ["marketplaceEvents"] })
-            refetch()
-        }, 2500)
+        await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["marketplaceEvents"] }),
+            queryClient.invalidateQueries({ queryKey: ["sellerHistory"] }),
+        ])
+        refetch()
     }
 
     if (isLoading) {
@@ -221,8 +226,8 @@ export default function RecentlyListedNFTs() {
                         Active Arenas
                     </h2>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                        Showing {activeListings.length} court
-                        {activeListings.length === 1 ? "" : "s"} currently open for open bidding.
+                        Showing {displayListings.length} court
+                        {displayListings.length === 1 ? "" : "s"} currently open for open bidding.
                     </p>
                 </div>
                 <Link
@@ -234,7 +239,7 @@ export default function RecentlyListedNFTs() {
             </div>
 
             {/* GRID SECTIONS */}
-            {activeListings.length === 0 ? (
+            {displayListings.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center bg-zinc-50 rounded-2xl border border-dashed border-zinc-200 p-8">
                     <div className="p-3 bg-zinc-200/50 text-zinc-400 rounded-full mb-3">
                         <GiTennisCourt size={24} />
@@ -246,7 +251,7 @@ export default function RecentlyListedNFTs() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                    {activeListings.map(nft => (
+                    {displayListings.map(nft => (
                         <NFTBox
                             key={`${nft.nftAddress}-${nft.tokenId}`}
                             tokenId={nft.tokenId}
@@ -254,10 +259,13 @@ export default function RecentlyListedNFTs() {
                             price={nft.price}
                             marketplaceAddress={marketplaceAddress || ""}
                             marketplaceAbi={marketplaceAbi}
-                            onActionSuccess={handleRefreshData}
                             showControls={true}
                             isOwnedByUser={true}
                             isListed={true}
+                            onActionSuccess={(action: NFTBoxAction) => {
+                                applyOptimisticUpdate(nft.nftAddress, nft.tokenId, action)
+                                handleRefreshData()
+                            }}
                         />
                     ))}
                 </div>

@@ -5,11 +5,47 @@ import { FaGithub } from "react-icons/fa"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useAccount, useReadContract, useWriteContract } from "wagmi"
+import { useAccount, useReadContract, useWriteContract, useChainId } from "wagmi"
 import { useState } from "react"
+import { chainsToContracts, erc20Abi } from "@/constants"
 
 export default function Header() {
+    const chainId = useChainId()
+
+    const nftContractAddress = (chainsToContracts[chainId]?.courtNft as `0x${string}`) || "0x"
     const pathname = usePathname()
+    const { address, isConnected } = useAccount()
+    const [isMinting, setIsMinting] = useState(false)
+
+    const { writeContractAsync } = useWriteContract()
+
+    const { data: balance, refetch: refetchBalance } = useReadContract({
+        address: nftContractAddress,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: address ? [address] : undefined,
+        query: {
+            enabled: isConnected && !!address,
+        },
+    })
+
+    const handleClaimFaucet = async () => {
+        try {
+            setIsMinting(true)
+            await writeContractAsync({
+                address: nftContractAddress,
+                abi: erc20Abi,
+                functionName: "claimFaucet",
+            })
+            refetchBalance()
+        } catch (error) {
+            console.error("Error claiming faucet:", error)
+        } finally {
+            setIsMinting(false)
+        }
+    }
+
+    const showFaucetButton = isConnected && balance !== undefined && Number(balance) === 0
 
     const linkStyle = (path: string) =>
         `text-sm font-medium transition-colors hover:text-zinc-900 ${
@@ -72,6 +108,16 @@ export default function Header() {
                         Dashboard
                     </Link>
                 </div>
+
+                {showFaucetButton && (
+                    <button
+                        onClick={handleClaimFaucet}
+                        disabled={isMinting}
+                        className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-2 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                        {isMinting ? "Claiming..." : "🎁 Get Free USDC"}
+                    </button>
+                )}
 
                 <ConnectButton chainStatus="icon" showBalance={false} />
             </div>

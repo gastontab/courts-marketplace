@@ -1,11 +1,26 @@
 import NFTBox from "@/components/NFTBox"
 import { marketplaceAbi } from "@/constants"
 
+type ListingOverride = { isListed: boolean; price: string | null }
+type ActivityEntry = {
+    type: string
+    tokenId: string
+    nftAddress?: string
+    price?: string | null
+    oldPrice?: string | null
+    newPrice?: string | null
+}
+
 interface Props {
     inventory: any[]
     nftContractAddress: `0x${string}`
     marketplaceAddress: `0x${string}`
     refetchSellerHistory: () => void
+    onOptimisticUpdate: (
+        tokenId: string,
+        override: ListingOverride,
+        activityEntry?: ActivityEntry
+    ) => void
 }
 
 export default function CourtsCarousel({
@@ -13,6 +28,7 @@ export default function CourtsCarousel({
     nftContractAddress,
     marketplaceAddress,
     refetchSellerHistory,
+    onOptimisticUpdate,
 }: Props) {
     return (
         <div>
@@ -33,11 +49,42 @@ export default function CourtsCarousel({
                                 contractAddress={nftContractAddress}
                                 marketplaceAddress={marketplaceAddress}
                                 marketplaceAbi={marketplaceAbi}
-                                onActionSuccess={() => refetchSellerHistory()}
                                 showControls={true}
                                 isOwnedByUser={false}
                                 isListed={item.isListed}
                                 fromMyDashboard={true}
+                                onActionSuccess={(action: {
+                                    type: "UPDATED" | "CANCELED"
+                                    newPrice?: string
+                                }) => {
+                                    refetchSellerHistory()
+
+                                    if (action.type === "CANCELED") {
+                                        onOptimisticUpdate(
+                                            item.tokenId,
+                                            { isListed: false, price: null },
+                                            {
+                                                type: "CANCELED",
+                                                tokenId: item.tokenId,
+                                                nftAddress: nftContractAddress,
+                                            }
+                                        )
+                                    }
+
+                                    if (action.type === "UPDATED" && action.newPrice) {
+                                        onOptimisticUpdate(
+                                            item.tokenId,
+                                            { isListed: true, price: action.newPrice },
+                                            {
+                                                type: "UPDATED",
+                                                tokenId: item.tokenId,
+                                                nftAddress: nftContractAddress,
+                                                oldPrice: item.price,
+                                                newPrice: action.newPrice,
+                                            }
+                                        )
+                                    }
+                                }}
                             />
                         </div>
                     ))}

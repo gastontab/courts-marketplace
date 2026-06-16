@@ -8,13 +8,15 @@ import { courtAbi } from "../constants"
 import { CgSpinner } from "react-icons/cg"
 import { FaTag, FaTimesCircle, FaCheck, FaHourglassHalf } from "react-icons/fa"
 
+export type NFTBoxAction = { type: "UPDATED"; newPrice: string } | { type: "CANCELED" }
+
 interface NFTBoxProps {
     tokenId: string
     contractAddress: string
     price: string
     marketplaceAddress: string
     marketplaceAbi: any
-    onActionSuccess?: () => void
+    onActionSuccess?: (action: NFTBoxAction) => void
     showControls?: boolean
     isOwnedByUser?: boolean
     isListed?: boolean
@@ -42,6 +44,7 @@ export default function NFTBox({
 
     const [isEditingPrice, setIsEditingPrice] = useState(false)
     const [newPrice, setNewPrice] = useState("")
+    const [pendingAction, setPendingAction] = useState<NFTBoxAction | null>(null)
 
     // 1. Read the TokenURI for the court metadata
     const { data: tokenURIData, isLoading: isTokenURILoading } = useReadContract({
@@ -74,17 +77,16 @@ export default function NFTBox({
             setIsEditingPrice(false)
             setNewPrice("")
 
-            if (onActionSuccess) {
-                setTimeout(() => {
-                    onActionSuccess()
-                }, 2500)
-            } else {
+            if (onActionSuccess && pendingAction) {
+                onActionSuccess(pendingAction)
+                setPendingAction(null)
+            } else if (!onActionSuccess) {
                 setTimeout(() => {
                     router.refresh()
                 }, 2500)
             }
         }
-    }, [isTxSuccess, onActionSuccess, router])
+    }, [isTxSuccess, onActionSuccess, pendingAction, router])
 
     // Fetch metadata
     useEffect(() => {
@@ -109,6 +111,7 @@ export default function NFTBox({
     const handleCancelListing = async (e: React.MouseEvent) => {
         e.stopPropagation()
         try {
+            setPendingAction({ type: "CANCELED" })
             await writeContractAsync({
                 abi: marketplaceAbi,
                 address: marketplaceAddress as `0x${string}`,
@@ -117,6 +120,7 @@ export default function NFTBox({
             })
         } catch (err) {
             console.error("Error canceling listing:", err)
+            setPendingAction(null)
         }
     }
 
@@ -127,6 +131,7 @@ export default function NFTBox({
 
         try {
             const parsedPrice = BigInt(Number(newPrice) * 10 ** 6)
+            setPendingAction({ type: "UPDATED", newPrice: parsedPrice.toString() })
             await writeContractAsync({
                 abi: marketplaceAbi,
                 address: marketplaceAddress as `0x${string}`,
@@ -135,6 +140,7 @@ export default function NFTBox({
             })
         } catch (err) {
             console.error("Error updating price:", err)
+            setPendingAction(null)
         }
     }
 

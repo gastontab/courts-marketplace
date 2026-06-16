@@ -1,15 +1,15 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
     useAccount,
     useChainId,
     useWriteContract,
     useReadContract,
     useWaitForTransactionReceipt,
+    useWatchContractEvent,
 } from "wagmi"
-import { useQuery } from "@tanstack/react-query"
-import { request } from "graphql-request"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { chainsToContracts, nftAbi, marketplaceAbi } from "@/constants"
 import NFTBox from "@/components/NFTBox"
 import WithdrawPanel from "@/components/WithdrawPanel"
@@ -25,6 +25,7 @@ import {
 } from "react-icons/fa"
 import CourtsCarousel from "@/components/CourtsCarousel"
 import MarketplaceActivityTable from "@/components/MarketplaceActivityTable"
+import { useOptimisticCartState } from "@/hooks/useOptimisticCartState"
 
 const GET_SELLER_HISTORY = `
   query GetSellerHistory {
@@ -90,6 +91,7 @@ const GET_SELLER_HISTORY = `
 export default function SellerDashboard() {
     const { address } = useAccount()
     const chainId = useChainId()
+    const queryClient = useQueryClient()
 
     const marketplaceAddress =
         (chainsToContracts[chainId]?.nftMarketplace as `0x${string}`) || "0x"
@@ -152,10 +154,7 @@ export default function SellerDashboard() {
     }, [existingListing])
 
     // 3. Retrieve the complete history to set up the user's courts (Carousel)
-    const {
-        data: rindexerData,
-        refetch: refetchSellerHistory,
-    } = useQuery({
+    const { data: rindexerData, refetch: refetchSellerHistory } = useQuery({
         queryKey: ["sellerHistory", address],
         queryFn: async () => {
             const res = await fetch("/api/graphql", {
@@ -172,6 +171,22 @@ export default function SellerDashboard() {
             return json.data
         },
         enabled: !!address,
+    })
+
+    const refetchAll = async () => {
+        await Promise.all([
+            refetchSellerHistory(),
+            queryClient.invalidateQueries({ queryKey: ["marketplaceEvents"] }),
+        ])
+    }
+
+    useWatchContractEvent({
+        address: marketplaceAddress,
+        abi: marketplaceAbi,
+        onLogs() {
+            refetchAll()
+            refetchProceeds()
+        },
     })
 
     const myCartsState = useMemo(() => {
@@ -363,6 +378,8 @@ export default function SellerDashboard() {
         }
     }, [rindexerData, address])
 
+    const { displayState, applyOptimisticUpdate } = useOptimisticCartState(myCartsState)
+
     // 4. Executions (Approve, List, Withdraw)
     const {
         data: approvalHash,
@@ -392,6 +409,17 @@ export default function SellerDashboard() {
             hash: withdrawHash,
             query: { enabled: !!withdrawHash },
         })
+
+    useEffect(() => {
+        if (isListingSuccess) {
+            const formattedPrice = addDecimalsToPrice(price).toString()
+            applyOptimisticUpdate(
+                tokenId,
+                { isListed: true, price: formattedPrice },
+                { type: "LISTED", tokenId, nftAddress, price: formattedPrice }
+            )
+        }
+    }, [isListingSuccess])
 
     /*//////////////////////////////////////////////////////////////
                              HANDLERS
@@ -710,13 +738,14 @@ export default function SellerDashboard() {
                 </div>
 
                 <CourtsCarousel
-                    inventory={myCartsState.inventory}
+                    inventory={displayState.inventory}
                     nftContractAddress={nftContractAddress}
                     marketplaceAddress={marketplaceAddress}
-                    refetchSellerHistory={refetchSellerHistory}
+                    refetchSellerHistory={refetchAll}
+                    onOptimisticUpdate={applyOptimisticUpdate}
                 />
 
-                <MarketplaceActivityTable activity={myCartsState.activity} />
+                <MarketplaceActivityTable activity={displayState.activity} />
             </div>
         </div>
     )
