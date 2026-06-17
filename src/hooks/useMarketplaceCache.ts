@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
+import { useAccount } from "wagmi"
 
 export type ListingOverride = {
     isListed: boolean
@@ -24,11 +25,12 @@ type OverridesCache = {
     activity: ActivityOverrideItem[]
 }
 
-const CACHE_KEY_LOCAL = "grand_slam_marketplace_overrides"
+const getLocalOverrides = (address: string | undefined): OverridesCache => {
+    if (typeof window === "undefined" || !address) return { listings: {}, activity: [] }
 
-const getLocalOverrides = (): OverridesCache => {
-    if (typeof window === "undefined") return { listings: {}, activity: [] }
-    const stored = localStorage.getItem(CACHE_KEY_LOCAL)
+    const stored = localStorage.getItem(
+        `grand_slam_marketplace_overrides_${address.toLowerCase()}`
+    )
     if (!stored) return { listings: {}, activity: [] }
 
     try {
@@ -43,21 +45,27 @@ const getLocalOverrides = (): OverridesCache => {
     }
 }
 
-const setLocalOverrides = (data: OverridesCache) => {
-    if (typeof window !== "undefined") {
-        localStorage.setItem(CACHE_KEY_LOCAL, JSON.stringify(data))
+const setLocalOverrides = (address: string | undefined, data: OverridesCache) => {
+    if (typeof window !== "undefined" && address) {
+        localStorage.setItem(
+            `grand_slam_marketplace_overrides_${address.toLowerCase()}`,
+            JSON.stringify(data)
+        )
     }
 }
 
 export function useMarketplaceCache() {
     const queryClient = useQueryClient()
-    const queryKey = ["marketplaceOverrides"]
+    const { address } = useAccount()
+
+    const queryKey = ["marketplaceOverrides", address?.toLowerCase() || "disconnected"]
 
     const { data } = useQuery<OverridesCache>({
         queryKey,
-        queryFn: () => getLocalOverrides(),
+        queryFn: () => getLocalOverrides(address),
         staleTime: Infinity,
         gcTime: Infinity,
+        enabled: true,
     })
 
     const currentOverrides = data || { listings: {}, activity: [] }
@@ -85,7 +93,7 @@ export function useMarketplaceCache() {
                 }
 
                 const nextState = { listings: nextListings, activity: nextActivity }
-                setLocalOverrides(nextState)
+                setLocalOverrides(address, nextState)
                 return nextState
             })
 
@@ -94,12 +102,12 @@ export function useMarketplaceCache() {
                     if (!old) return { listings: {}, activity: [] }
                     const { [key]: _drop, ...restListings } = old.listings
                     const nextState = { ...old, listings: restListings }
-                    setLocalOverrides(nextState)
+                    setLocalOverrides(address, nextState)
                     return nextState
                 })
             }, 90_000)
         },
-        [queryClient]
+        [queryClient, queryKey, address]
     )
 
     const syncWithRealData = useCallback(
@@ -146,14 +154,14 @@ export function useMarketplaceCache() {
 
                 if (changed) {
                     const nextState = { listings: nextListings, activity: nextActivity }
-                    setLocalOverrides(nextState)
+                    setLocalOverrides(address, nextState)
                     return nextState
                 }
 
                 return old
             })
         },
-        [queryClient]
+        [queryClient, queryKey, address]
     )
 
     return {
