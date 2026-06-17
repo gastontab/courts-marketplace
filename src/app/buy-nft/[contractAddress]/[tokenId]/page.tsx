@@ -137,11 +137,6 @@ export default function BuyNftPage() {
                     price: price,
                 }
             )
-
-            const timer = setTimeout(() => {
-                router.push("/")
-            }, 4000)
-            return () => clearTimeout(timer)
         }
     }, [
         step,
@@ -443,7 +438,7 @@ export default function BuyNftPage() {
                                             </span>
                                             <span className="text-xs text-emerald-700/80">
                                                 You are now the authorized owner of Grand Slam
-                                                Court #{tokenId}. Redirecting to open board...
+                                                Court #{tokenId}.
                                             </span>
                                         </div>
 

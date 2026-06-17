@@ -1,4 +1,3 @@
-// src/components/WithdrawPanel.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -22,13 +21,25 @@ export default function WithdrawPanel({
 }: WithdrawPanelProps) {
     const [showSuccessMessage, setShowSuccessMessage] = useState(false)
 
+    const [optimisticProceeds, setOptimisticProceeds] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!isWithdrawSuccess && !isWithdrawConfirming && !isWithdrawPending) {
+            setOptimisticProceeds(null)
+        }
+    }, [proceeds, isWithdrawSuccess, isWithdrawConfirming, isWithdrawPending])
+
     useEffect(() => {
         if (isWithdrawSuccess) {
             setShowSuccessMessage(true)
+            setOptimisticProceeds("0")
+
             const timer = setTimeout(() => setShowSuccessMessage(false), 3000)
             return () => clearTimeout(timer)
         }
     }, [isWithdrawSuccess])
+
+    const displayProceeds = optimisticProceeds !== null ? optimisticProceeds : proceeds
 
     return (
         <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm h-fit flex flex-col justify-between gap-4">
@@ -47,7 +58,7 @@ export default function WithdrawPanel({
                     Withdrawable Funds
                 </span>
                 <span className="text-3xl font-extrabold text-zinc-900 tracking-tight mt-1">
-                    {proceeds} <span className="text-sm font-bold text-zinc-500">USDC</span>
+                    {displayProceeds} <span className="text-sm font-bold text-zinc-500">USDC</span>
                 </span>
             </div>
 
@@ -60,7 +71,9 @@ export default function WithdrawPanel({
 
             <button
                 onClick={handleWithdraw}
-                disabled={Number(proceeds) <= 0 || isWithdrawPending || isWithdrawConfirming}
+                disabled={
+                    Number(displayProceeds) <= 0 || isWithdrawPending || isWithdrawConfirming
+                }
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-100 disabled:text-zinc-400 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
             >
                 {isWithdrawPending || isWithdrawConfirming ? (

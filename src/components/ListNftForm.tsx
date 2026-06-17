@@ -425,6 +425,12 @@ export default function SellerDashboard() {
         })
 
     useEffect(() => {
+        if (isWithdrawSuccess) {
+            refetchProceeds()
+        }
+    }, [isWithdrawSuccess, refetchProceeds])
+
+    useEffect(() => {
         if (isListingSuccess) {
             const formattedPrice = addDecimalsToPrice(price).toString()
             applyOptimisticUpdate(
