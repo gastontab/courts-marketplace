@@ -114,7 +114,6 @@ export default function MintCourt({ contractAddress }: MintCourtProps) {
     useEffect(() => {
         if (isMintConfirmed && dataFromMintReceipt) {
             try {
-                // Buscamos el log que tenga indexados los topics típicos de Transfer (3 topics: Event, From, To)
                 const transferLog = dataFromMintReceipt.logs.find(
                     log => log.topics.length === 4 || log.topics.length === 3
                 )

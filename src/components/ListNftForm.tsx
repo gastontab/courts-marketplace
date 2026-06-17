@@ -25,7 +25,7 @@ import {
 } from "react-icons/fa"
 import CourtsCarousel from "@/components/CourtsCarousel"
 import MarketplaceActivityTable from "@/components/MarketplaceActivityTable"
-import { useOptimisticCartState } from "@/hooks/useOptimisticCartState"
+import { useMarketplaceCache } from "@/hooks/useMarketplaceCache"
 
 const GET_SELLER_HISTORY = `
   query GetSellerHistory {
@@ -92,6 +92,7 @@ export default function SellerDashboard() {
     const { address } = useAccount()
     const chainId = useChainId()
     const queryClient = useQueryClient()
+    const { overrides, applyOptimisticUpdate, syncWithRealData } = useMarketplaceCache()
 
     const marketplaceAddress =
         (chainsToContracts[chainId]?.nftMarketplace as `0x${string}`) || "0x"
@@ -378,7 +379,20 @@ export default function SellerDashboard() {
         }
     }, [rindexerData, address])
 
-    const { displayState, applyOptimisticUpdate } = useOptimisticCartState(myCartsState)
+    const displayState = useMemo(() => {
+        const inventory = myCartsState.inventory.map(item => {
+            const itemAddress = (item as any).nftAddress || nftContractAddress
+            const key = `${itemAddress.toLowerCase()}-${item.tokenId}`
+            const o = overrides.listings[key]
+
+            return o ? { ...item, isListed: o.isListed, price: o.price } : item
+        })
+
+        return {
+            inventory,
+            activity: [...overrides.activity, ...myCartsState.activity],
+        }
+    }, [myCartsState, overrides, nftContractAddress])
 
     // 4. Executions (Approve, List, Withdraw)
     const {
@@ -414,12 +428,23 @@ export default function SellerDashboard() {
         if (isListingSuccess) {
             const formattedPrice = addDecimalsToPrice(price).toString()
             applyOptimisticUpdate(
+                nftAddress,
                 tokenId,
                 { isListed: true, price: formattedPrice },
-                { type: "LISTED", tokenId, nftAddress, price: formattedPrice }
+                { type: "LISTED", tokenId, nftAddress, price: formattedPrice, seller: address }
             )
         }
     }, [isListingSuccess])
+
+    useEffect(() => {
+        if (myCartsState.inventory.length > 0) {
+            const inventoryWithAddress = myCartsState.inventory.map(item => ({
+                ...item,
+                nftAddress: nftContractAddress,
+            }))
+            syncWithRealData(inventoryWithAddress, myCartsState.activity)
+        }
+    }, [myCartsState.inventory, myCartsState.activity, syncWithRealData, nftContractAddress])
 
     /*//////////////////////////////////////////////////////////////
                              HANDLERS
@@ -742,7 +767,31 @@ export default function SellerDashboard() {
                     nftContractAddress={nftContractAddress}
                     marketplaceAddress={marketplaceAddress}
                     refetchSellerHistory={refetchAll}
-                    onOptimisticUpdate={applyOptimisticUpdate}
+                    onOptimisticUpdate={(tokenId, override, activityEntry) => {
+                        let finalActivity
+
+                        if (activityEntry) {
+                            finalActivity = {
+                                ...activityEntry,
+                                nftAddress: activityEntry.nftAddress || nftContractAddress,
+                            }
+                        } else if (override.isListed === false) {
+                            finalActivity = {
+                                type: "CANCELED",
+                                tokenId: tokenId,
+                                nftAddress: nftContractAddress,
+                            }
+                        } else {
+                            finalActivity = {
+                                type: "UPDATED",
+                                tokenId: tokenId,
+                                nftAddress: nftContractAddress,
+                                newPrice: override.price,
+                            }
+                        }
+
+                        applyOptimisticUpdate(nftContractAddress, tokenId, override, finalActivity)
+                    }}
                 />
 
                 <MarketplaceActivityTable activity={displayState.activity} />

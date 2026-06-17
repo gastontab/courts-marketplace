@@ -14,6 +14,7 @@ import { chainsToContracts, erc20Abi, marketplaceAbi } from "@/constants"
 import NFTBox from "@/components/NFTBox"
 import { CgSpinner } from "react-icons/cg"
 import { FaTicketAlt, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa"
+import { useMarketplaceCache } from "@/hooks/useMarketplaceCache"
 
 interface Listing {
     price: bigint
@@ -28,6 +29,8 @@ export default function BuyNftPage() {
     }
     const { address } = useAccount()
     const chainId = useChainId()
+
+    const { applyOptimisticUpdate } = useMarketplaceCache()
 
     const marketplaceAddress =
         (chainsToContracts[chainId]?.nftMarketplace as `0x${string}`) || "0x"
@@ -121,12 +124,36 @@ export default function BuyNftPage() {
     // Automatic redirect loop upon completion
     useEffect(() => {
         if (step === 3 && isPurchaseSuccess) {
+            applyOptimisticUpdate(
+                contractAddress,
+                tokenId,
+                { isListed: false, price: null },
+                {
+                    type: "PURCHASED",
+                    tokenId: tokenId,
+                    nftAddress: contractAddress,
+                    buyer: address || "0x",
+                    seller: seller || "0x",
+                    price: price,
+                }
+            )
+
             const timer = setTimeout(() => {
                 router.push("/")
             }, 4000)
             return () => clearTimeout(timer)
         }
-    }, [step, isPurchaseSuccess, router])
+    }, [
+        step,
+        isPurchaseSuccess,
+        router,
+        contractAddress,
+        tokenId,
+        address,
+        seller,
+        price,
+        applyOptimisticUpdate,
+    ])
 
     return (
         <div className="min-h-[calc(100vh-75px)] bg-zinc-50 py-12">

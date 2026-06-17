@@ -1,14 +1,14 @@
 "use client"
 
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { useChainId } from "wagmi"
 import NFTBox from "./NFTBox"
 import Link from "next/link"
 import { CgSpinner } from "react-icons/cg"
 import { GiTennisCourt } from "react-icons/gi"
 import { marketplaceAbi, chainsToContracts } from "@/constants"
-import { useOptimisticListings } from "@/hooks/useOptimisticListings"
+import { useMarketplaceCache } from "@/hooks/useMarketplaceCache"
 import { NFTBoxAction } from "@/components/NFTBox"
 
 const GET_MARKETPLACE_EVENTS = `
@@ -183,7 +183,65 @@ export default function RecentlyListedNFTs() {
         return Object.values(listingsMap)
     }, [data])
 
-    const { displayListings, applyOptimisticUpdate } = useOptimisticListings(activeListings)
+    const { overrides, applyOptimisticUpdate, syncWithRealData } = useMarketplaceCache()
+
+    const listingsForSync = useMemo(() => {
+        return activeListings.map(l => ({
+            tokenId: l.tokenId,
+            nftAddress: l.nftAddress,
+            isListed: true,
+            price: l.price,
+        }))
+    }, [activeListings])
+
+    useEffect(() => {
+        if (listingsForSync.length > 0) {
+            syncWithRealData(listingsForSync, [])
+        }
+    }, [listingsForSync, syncWithRealData])
+
+    const displayListings = useMemo(() => {
+        const currentListings = activeListings
+            .filter(l => {
+                const key = `${l.nftAddress.toLowerCase()}-${l.tokenId}`
+                const o = overrides.listings[key]
+                return o ? o.isListed : true
+            })
+            .map(l => {
+                const key = `${l.nftAddress.toLowerCase()}-${l.tokenId}`
+                const o = overrides.listings[key]
+                if (o && o.price) {
+                    return { ...l, price: o.price }
+                }
+                return l
+            })
+
+        const newOptimisticListings: any[] = []
+
+        for (const [key, override] of Object.entries(overrides.listings)) {
+            if (override.isListed) {
+                const existsInRealData = activeListings.some(
+                    l => `${l.nftAddress.toLowerCase()}-${l.tokenId}` === key
+                )
+
+                if (!existsInRealData) {
+                    const [nftAddress, tokenId] = key.split("-")
+
+                    newOptimisticListings.push({
+                        tokenId,
+                        nftAddress,
+                        price: override.price,
+                        seller: "You",
+                        rindexerId: `optimistic-${key}`,
+                        txHash: "0x",
+                    })
+                }
+            }
+        }
+
+        // 3. Combinamos los reales del indexador con los nuevos optimistas al principio de la lista
+        return [...newOptimisticListings, ...currentListings]
+    }, [activeListings, overrides.listings])
 
     const handleRefreshData = async () => {
         await Promise.all([
@@ -263,7 +321,22 @@ export default function RecentlyListedNFTs() {
                             isOwnedByUser={true}
                             isListed={true}
                             onActionSuccess={(action: NFTBoxAction) => {
-                                applyOptimisticUpdate(nft.nftAddress, nft.tokenId, action)
+                                const isCancelation = action.type === "CANCELED"
+                                const finalPrice = isCancelation ? null : action.newPrice
+
+                                applyOptimisticUpdate(
+                                    nft.nftAddress,
+                                    nft.tokenId,
+                                    { isListed: !isCancelation, price: finalPrice },
+                                    {
+                                        type: action.type,
+                                        tokenId: nft.tokenId,
+                                        nftAddress: nft.nftAddress,
+                                        price: finalPrice,
+                                        newPrice: finalPrice,
+                                        oldPrice: nft.price,
+                                    }
+                                )
                                 handleRefreshData()
                             }}
                         />
