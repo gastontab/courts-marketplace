@@ -37,6 +37,7 @@ export default function BuyNftPage() {
     const usdcAddress = (chainsToContracts[chainId]?.usdc as `0x${string}`) || "0x"
 
     const [step, setStep] = useState(1) // 1: Preview, 2: Approval, 3: Purchase
+    const [isSuccessfullyBought, setIsSuccessfullyBought] = useState(false)
 
     // 1. Get the listing details from marketplace
     const { data: listingData, isLoading: isListingLoading } = useReadContract({
@@ -123,7 +124,9 @@ export default function BuyNftPage() {
 
     // Automatic redirect loop upon completion
     useEffect(() => {
-        if (step === 3 && isPurchaseSuccess) {
+        if (isPurchaseSuccess && !isSuccessfullyBought) {
+            setIsSuccessfullyBought(true)
+
             applyOptimisticUpdate(
                 contractAddress,
                 tokenId,
@@ -137,10 +140,16 @@ export default function BuyNftPage() {
                     price: price,
                 }
             )
+
+            const timer = setTimeout(() => {
+                router.push("/")
+            }, 4000)
+
+            return () => clearTimeout(timer)
         }
     }, [
-        step,
         isPurchaseSuccess,
+        isSuccessfullyBought,
         router,
         contractAddress,
         tokenId,
@@ -181,7 +190,7 @@ export default function BuyNftPage() {
                             Validating court ownership states...
                         </p>
                     </div>
-                ) : !isListed ? (
+                ) : !isListed && !isSuccessfullyBought ? (
                     <div className="p-8 bg-white rounded-2xl shadow-xl border border-zinc-200 text-center flex flex-col items-center max-w-md mx-auto">
                         <FaExclamationTriangle className="text-zinc-400 mb-3" size={28} />
                         <h2 className="text-lg font-bold text-zinc-900 mb-1">Arena Unlisted</h2>
